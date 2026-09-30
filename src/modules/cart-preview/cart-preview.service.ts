@@ -181,7 +181,12 @@ export class CartPreviewService {
             message: 'Lấy thông tin giỏ hàng thành công.',
             data: {
                 items: previewItems,
-                totalAmount: subtotal
+                totalAmount: subtotal,
+                itemCount: previewItems.length,
+                totalQuantity: previewItems.reduce(
+                    (total, item) => total + Number(item.quantity || 0),
+                    0
+                )
             }
         };
     }

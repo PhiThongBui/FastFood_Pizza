@@ -25,6 +25,7 @@ export class CartItemController {
     private readonly transaction: Sequelize
   ) { }
 
+  @UseGuards(JWTGuard)
   @Post('/addtocart')
   @ApiBearerAuth('access-token')
   @ApiOperation({
@@ -170,33 +171,13 @@ Bắt buộc:
   })
   async addToCart(
     @Body() dataAdd: CreateCartItemDto,
-    @Res({ passthrough: true }) res: Response,
     @Req() req: Request,
   ) {
-    let sessionId = Helper.getSessionIdFromRequest(req);
-    let userId: number | null = null;
-
-    const authHeader = req.headers?.authorization;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      try {
-        const token = authHeader.substring(7);
-        const decoded = this.JWTservice.verify(token, this.configService.get('JWT_SECRET')) as any;
-        userId = decoded.uid;
-      } catch (error: any) {
-        userId = null;
-      }
-    }
-
-    if (!userId && !sessionId) {
-      sessionId = Helper.generateSessionId();
-      Helper.setSessionCookie(sessionId, res);
-    }
+    const userId = (req.user as { uid: number; role: string }).uid;
 
     return await this.cartItemService.addToCart({
       ...dataAdd,
       userId,
-      sessionId
     } as AddToCartParams);
   }
 

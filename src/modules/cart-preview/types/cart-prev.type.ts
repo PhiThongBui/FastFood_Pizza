@@ -108,6 +108,8 @@ export interface CartPreviewOutput {
     data: {
         items: CartPreviewItem[];
         totalAmount: number;
+        itemCount?: number;
+        totalQuantity?: number;
     }
 }
 

@@ -18,6 +18,28 @@ export class CartPreviewController {
     private readonly cartService: CartService
 
   ) { }
+
+  private withCartCounts<T extends { data?: { items?: Array<{ quantity?: number }> } }>(
+    response: T,
+  ): T {
+    const items = response.data?.items || [];
+
+    if (response.data) {
+      const data = response.data as typeof response.data & {
+        itemCount: number;
+        totalQuantity: number;
+      };
+
+      data.itemCount = items.length;
+      data.totalQuantity = items.reduce(
+        (total, item) => total + Number(item.quantity || 0),
+        0,
+      );
+    }
+
+    return response;
+  }
+
   @Post('/checkout-preview')
   @ApiBearerAuth('access-token')
   @ApiOperation({
@@ -77,10 +99,10 @@ API sẽ tự động xác định cart tương ứng.
       userId,
     );
 
-    return await this.cartPreviewService.cartPreview(
+    return this.withCartCounts(await this.cartPreviewService.cartPreview(
       cart.id,
       cartItemIds,
-    );
+    ));
   }
 
   @Get('/cart')
@@ -123,9 +145,9 @@ API sẽ tự động xác định cart tương ứng.
       userId,
     );
 
-    return await this.cartPreviewService.getUserCartPreview(
+    return this.withCartCounts(await this.cartPreviewService.getUserCartPreview(
       cart.id,
-    );
+    ));
   }
 
   @UseGuards(JWTGuard)
