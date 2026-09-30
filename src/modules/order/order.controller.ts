@@ -138,4 +138,15 @@ export class OrderController {
   ) {
     return this.orderService.cancelMyOrder(Number(req.user?.uid), id, dto);
   }
+
+  @UseGuards(JWTGuard)
+  @Patch('my-orders/:id/pay-now')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Switch my COD order to SePay and return payment info' })
+  payMyOrderNow(
+    @Req() req: any,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.orderService.payMyOrderNow(Number(req.user?.uid), id);
+  }
 }

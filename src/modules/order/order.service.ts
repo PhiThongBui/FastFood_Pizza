@@ -5,13 +5,14 @@ import { AddressService } from '../address/address.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Sequelize } from 'sequelize-typescript';
 import { Helper } from '@/utils/helper';
-import { ORDERTYPE, ORDERSTATUS, PAYMENTSTATUS } from '@/models/order.model';
+import { ORDERTYPE, ORDERSTATUS, PAYMENTMETHOD, PAYMENTSTATUS } from '@/models/order.model';
 import { Op, col, fn } from 'sequelize';
 import { AdminOrderDateRangeQueryDto, AdminOrderLimitQueryDto, AdminOrderListQueryDto, AdminOrderRevenueQueryDto } from './dto/admin-order-statistics.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { RedisService } from '../redis/redis.service';
 import { StorePolicySettingService } from '../store-policy-setting/store-policy-setting.service';
+import { SepayService } from '../sepay/sepay.service';
 
 interface MyOrdersQuery {
     page?: string | number;
@@ -40,6 +41,7 @@ export class OrderService {
         private readonly addressService: AddressService,
         private readonly redisService: RedisService,
         private readonly storePolicySettingService: StorePolicySettingService,
+        private readonly sepayService: SepayService,
         private readonly sequelize: Sequelize
     ) { }
 
@@ -593,6 +595,69 @@ export class OrderService {
                 limit: limitPage,
                 totalItems: count,
                 totalPages: Math.ceil(count / limitPage)
+            }
+        };
+    }
+
+    async payMyOrderNow(userId: number, orderId: number) {
+        if (!userId) throw new BadRequestException('User id not found');
+
+        const order = await this.orderModel.findOne({
+            where: {
+                id: orderId,
+                userId
+            }
+        });
+
+        if (!order) {
+            throw new BadRequestException('Order not found');
+        }
+
+        if (order.orderStatus === ORDERSTATUS.CANCELLED) {
+            throw new BadRequestException('Cancelled order cannot be paid');
+        }
+
+        if (order.paymentStatus === PAYMENTSTATUS.PAID) {
+            throw new BadRequestException('Order has already been paid');
+        }
+
+        if (order.paymentMethod !== PAYMENTMETHOD.CASH && order.paymentMethod !== PAYMENTMETHOD.SEPAY) {
+            throw new BadRequestException('This payment method cannot be switched to online payment');
+        }
+
+        const sepayPayment = await this.sepayService.createPayment({
+            orderNumber: order.orderNumber,
+            amount: Number(order.finalTotal || 0),
+            orderInfo: `Thanh toán đơn hàng ${order.orderNumber}`
+        });
+
+        if (order.paymentMethod !== PAYMENTMETHOD.SEPAY || order.paymentStatus !== PAYMENTSTATUS.PENDING) {
+            await order.update({
+                paymentMethod: PAYMENTMETHOD.SEPAY,
+                paymentStatus: PAYMENTSTATUS.PENDING,
+                paidAt: null
+            } as Partial<Order>);
+        }
+
+        await this.redisService.addPendingOrder(order.orderNumber);
+
+        return {
+            success: true,
+            message: 'Vui lòng hoàn tất thanh toán chuyển khoản',
+            data: {
+                orderNumber: order.orderNumber,
+                orderId: order.id,
+                finalTotal: order.finalTotal,
+                paymentMethod: PAYMENTMETHOD.SEPAY,
+                paymentStatus: PAYMENTSTATUS.PENDING,
+                paymentInfo: {
+                    qrCode: sepayPayment.qrDataURL,
+                    bankAccount: sepayPayment.bankAccount,
+                    bankName: sepayPayment.bankName,
+                    accountName: sepayPayment.accountName,
+                    transferContent: sepayPayment.transferContent,
+                    amount: sepayPayment.amount
+                }
             }
         };
     }
