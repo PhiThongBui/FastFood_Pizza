@@ -1,6 +1,6 @@
 import { applyDecorators } from "@nestjs/common";
 import { ApiProperty } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { IsBoolean, IsDate, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from "class-validator";
 import {  Max, Min } from "sequelize-typescript";
 
@@ -47,6 +47,11 @@ export const NumberRequired = (name: string, min = 0, max?: number) => {
 export const BooleanNotRequired = applyDecorators(
     ApiProperty({
         required: false
+    }),
+    Transform(({ value }) => {
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        return value;
     }),
     IsBoolean(),
     IsOptional()

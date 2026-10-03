@@ -170,6 +170,23 @@ export const DEFAULT_PERMISSION_GROUPS = [
     ],
   },
   {
+    key: 'cartAddOns',
+    label: 'Gợi ý thêm vào đơn',
+    description: 'Quản lý danh mục sản phẩm hiển thị trong phần thêm nhanh ở giỏ hàng',
+    permissions: [
+      {
+        value: 'CART_ADD_ON_SETTING_VIEW',
+        label: 'Xem cấu hình gợi ý',
+        description: 'Xem các danh mục đang được dùng để gợi ý thêm vào đơn hàng',
+      },
+      {
+        value: 'CART_ADD_ON_SETTING_UPDATE',
+        label: 'Cập nhật cấu hình gợi ý',
+        description: 'Thêm, xóa, bật tắt và sắp xếp danh mục gợi ý trong giỏ hàng',
+      },
+    ],
+  },
+  {
     key: 'notifications',
     label: 'Thông báo',
     description: 'Push, email, banner và chiến dịch nội bộ',

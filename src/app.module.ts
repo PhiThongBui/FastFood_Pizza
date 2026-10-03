@@ -40,6 +40,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { StorePolicySettingModule } from './modules/store-policy-setting/store-policy-setting.module';
 import { DineInModule } from './modules/dine-in/dine-in.module';
 import { PermissionModule } from './modules/permission/permission.module';
+import { CartAddOnSettingModule } from './modules/cart-add-on-setting/cart-add-on-setting.module';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { PermissionModule } from './modules/permission/permission.module';
     LookupModule,
     ChatModule,
     StorePolicySettingModule,
+    CartAddOnSettingModule,
     DineInModule,
     PermissionModule,
   ],

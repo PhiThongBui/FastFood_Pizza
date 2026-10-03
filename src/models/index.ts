@@ -44,6 +44,8 @@ export {
   CHAT_QUICK_REPLY_ROLE,
 } from './chat-quick-reply.model';
 export { StorePolicySetting } from './store-policy-setting.model';
+export { CartAddOnCategorySetting } from './cart-add-on-category-setting.model';
+export { CartAddOnProductSetting } from './cart-add-on-product-setting.model';
 export { DiningTable, DINING_TABLE_STATUS } from './dining-table.model';
 export { TableSession, TABLE_SESSION_STATUS } from './table-session.model';
 export {
