@@ -2,6 +2,7 @@
 import { ENUMROLE } from '@/models';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -25,12 +26,53 @@ import { PermissionService } from '../permission/permission.service';
 
 @Injectable()
 export class UserService {
+  private readonly verificationResendLimit = 3;
+  private readonly verificationResendWindowMs = 15 * 60 * 1000;
+  private readonly verificationResendCooldownMs = 60 * 1000;
+  private readonly verificationResendAttempts = new Map<
+    string,
+    { count: number; windowStartedAt: number; lastSentAt: number }
+  >();
+
   constructor(
     @InjectModel(User) private readonly UserModel: typeof User,
     private readonly transaction: Sequelize,
     private readonly mailService: MailService,
     private readonly permissionService: PermissionService,
   ) {}
+
+  private normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
+  }
+
+  private assertCanResendVerification(email: string) {
+    const normalizedEmail = this.normalizeEmail(email);
+    const now = Date.now();
+    const current = this.verificationResendAttempts.get(normalizedEmail);
+    const tracker =
+      current && now - current.windowStartedAt < this.verificationResendWindowMs
+        ? current
+        : { count: 0, windowStartedAt: now, lastSentAt: 0 };
+
+    const cooldownRemaining = this.verificationResendCooldownMs - (now - tracker.lastSentAt);
+    if (tracker.lastSentAt && cooldownRemaining > 0) {
+      throw new BadRequestException(
+        `Vui lòng chờ ${Math.ceil(cooldownRemaining / 1000)} giây trước khi gửi lại mã xác thực.`,
+      );
+    }
+
+    if (tracker.count >= this.verificationResendLimit) {
+      throw new BadRequestException(
+        'Bạn đã gửi lại mã quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+      );
+    }
+
+    this.verificationResendAttempts.set(normalizedEmail, {
+      ...tracker,
+      count: tracker.count + 1,
+      lastSentAt: now,
+    });
+  }
 
   async findUserById(userId: number) {
     const user = await this.UserModel.findByPk(userId);
@@ -53,6 +95,8 @@ export class UserService {
     if (!alreadyUser) throw new BadRequestException('Người dùng chưa tồn tại!');
     if (!alreadyUser.dataValues.isEmailVerified)
       throw new BadRequestException('Email chưa được xác thực!');
+    if (!alreadyUser.dataValues.isActive)
+      throw new ForbiddenException('Tài khoản đã bị khóa hoặc không còn hoạt động');
     const matchesPassword = await alreadyUser.comparePassword(
       loginData.password,
     );
@@ -114,7 +158,8 @@ export class UserService {
   }
 
   async verifyRegistation(data: VerifyRegistationDto) {
-    const { otp, email } = data;
+    const { otp } = data;
+    const email = this.normalizeEmail(data.email);
     const transaction = await this.transaction.transaction();
     try {
       const user = await this.UserModel.findOne({
@@ -147,6 +192,7 @@ export class UserService {
       );
 
       await transaction.commit();
+      this.verificationResendAttempts.delete(email);
 
       return {
         message: 'Verify Registation SuccessFully!',
@@ -160,7 +206,7 @@ export class UserService {
   }
 
   async resendVerificationEmail(data: ResendRegistationDto) {
-    const { email } = data;
+    const email = this.normalizeEmail(data.email);
     const transaction = await this.transaction.transaction();
     try {
       const user = await this.UserModel.findOne({
@@ -168,8 +214,12 @@ export class UserService {
           email: email,
         },
       });
+      if (!user) throw new BadRequestException('Người dùng chưa tồn tại!');
       if (user?.dataValues.isEmailVerified)
         throw new BadRequestException('Email đã được xác thực!');
+
+      this.assertCanResendVerification(email);
+
       const otp = this.generateOTP();
       const otpExpires = Date.now() + 5 * 60 * 1000;
 
@@ -191,9 +241,10 @@ export class UserService {
         );
       }
 
+      await transaction.commit();
+
       return {
         message: 'Resend Registation SuccessFully!',
-        otp: otp,
         email: email,
       };
     } catch (error: any) {
@@ -235,6 +286,9 @@ export class UserService {
 
     if (!user) {
       throw new NotFoundException('Người dùng không tồn tại');
+    }
+    if (!user.dataValues.isActive) {
+      throw new ForbiddenException('Tài khoản đã bị khóa hoặc không còn hoạt động');
     }
     // Trả về user data mà không có password
     return user.getUserProfile();

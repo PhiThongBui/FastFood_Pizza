@@ -34,8 +34,6 @@ export class PermissionsGuard implements CanActivate {
     const actor = request.user;
     if (!actor?.uid) throw new ForbiddenException('Authenticated account is required');
 
-    if (hasAdminPrivileges(actor.role)) return true;
-
     const user = await this.userModel.findByPk(actor.uid, {
       attributes: ['id', 'role', 'isActive', 'permissions'],
     });
@@ -43,6 +41,8 @@ export class PermissionsGuard implements CanActivate {
     if (!user || !user.dataValues.isActive) {
       throw new ForbiddenException('Account is inactive or not found');
     }
+
+    if (hasAdminPrivileges(user.dataValues.role)) return true;
 
     if (user.dataValues.role !== ENUMROLE.STAFF) {
       throw new ForbiddenException('Staff role is required');
