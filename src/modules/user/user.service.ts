@@ -1,4 +1,4 @@
-﻿import { User } from '@/models';
+import { User } from '@/models';
 import { ENUMROLE } from '@/models';
 import {
   BadRequestException,
@@ -23,6 +23,7 @@ import {
 } from './dto/verifyRegistation.dto';
 import { UpdateUserAccessDto } from './dto/update-user-access.dto';
 import { PermissionService } from '../permission/permission.service';
+import { promises as dnsPromises } from 'dns';
 
 @Injectable()
 export class UserService {
@@ -130,7 +131,39 @@ export class UserService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
+  private async checkEmailMx(email: string): Promise<boolean> {
+    try {
+      const domain = email.split('@')[1]?.toLowerCase().trim();
+      if (!domain) return false;
+
+      if (domain.startsWith('gmail.') && domain !== 'gmail.com') return false;
+
+      const mxRecords = await Promise.race([
+        dnsPromises.resolveMx(domain),
+        new Promise<any[]>((_, reject) =>
+          setTimeout(() => reject(new Error('DNS Timeout')), 2500),
+        ),
+      ]);
+
+      return Boolean(
+        mxRecords &&
+          mxRecords.length > 0 &&
+          mxRecords.some((r) => r.exchange && r.exchange.trim().length > 0),
+      );
+    } catch (err: any) {
+      if (err.code === 'ENOTFOUND' || err.code === 'NODATA') {
+        return false;
+      }
+      return true;
+    }
+  }
+
   async register(createUserDto: CreateUserDto) {
+    const isDomainValid = await this.checkEmailMx(createUserDto.email);
+    if (!isDomainValid) {
+      throw new BadRequestException('Tên miền email không tồn tại hoặc không thể nhận thư!');
+    }
+
     const alreadyUser = await this.findByEmail(createUserDto.email);
     if (alreadyUser) throw new BadRequestException('Người dùng đã tồn tại!');
 
