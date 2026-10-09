@@ -59,7 +59,7 @@ import { CartAddOnSettingModule } from './modules/cart-add-on-setting/cart-add-o
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get('JWT_SCRECT'),
+        secret: configService.get('JWT_SECRET'),
         signOptions: {
           expiresIn: configService.get('JWT_EXPIRESIN') as number,
         },

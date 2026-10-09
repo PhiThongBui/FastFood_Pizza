@@ -261,7 +261,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
             throw new UnauthorizedException('Missing access token');
         }
 
-        const secret = this.configService.get<string>('JWT_SCRECT');
+        const secret = this.configService.get<string>('JWT_SECRET');
         if (!secret) {
             throw new BadRequestException('JWT secret is not configured');
         }

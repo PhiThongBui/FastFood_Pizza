@@ -84,7 +84,7 @@ export class CouponController {
     if (authBearer && authBearer.startsWith('Bearer ')) {
       try {
         const token = authBearer.substring(7);
-        const secret = this.configService.get('JWT_SECRET') || this.configService.get('JWT_SCRECT');
+        const secret = this.configService.get('JWT_SECRET');
         const decoded = this.jwtService.verify(token, secret ? { secret } : undefined) as any;
         userId = decoded?.uid || null;
       } catch {
