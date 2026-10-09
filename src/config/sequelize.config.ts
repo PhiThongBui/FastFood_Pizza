@@ -37,6 +37,8 @@ import { ConfigService } from '@nestjs/config';
 
 export const sequelizeConfig = (config: ConfigService) => {
   const isLocal = config.get('DB_HOST') === 'localhost';
+  const dbSsl = config.get<string>('DB_SSL');
+  const shouldUseSsl = dbSsl ? dbSsl === 'true' : !isLocal;
   const shouldSynchronize =
     config.get('DB_SYNCHRONIZE') === 'true' ||
     config.get('DB_SYNC') === 'true' ||
@@ -60,16 +62,16 @@ export const sequelizeConfig = (config: ConfigService) => {
       acquire: 60000, // Thời gian tối đa (ms) để cố lấy kết nối trước khi báo lỗi (60s)
       idle: 10000, // Thời gian (ms) một kết nối rảnh rỗi trước khi bị đóng
     },
-    dialectOptions: isLocal
-      ? {}
-      : {
+    dialectOptions: shouldUseSsl
+      ? {
           ssl: {
             require: true,
             rejectUnauthorized: false,
           },
           // Thêm keepAlive để giữ kết nối ổn định hơn trên môi trường cloud
           keepAlive: true,
-        },
+        }
+      : {},
     models: [
       User,
       Product,

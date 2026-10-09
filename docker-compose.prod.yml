@@ -1,0 +1,74 @@
+# file Docker compose điều phối hệ thống gồm 3 dịch vu: api, postgres, redis
+
+services:
+  api:
+    build: # chỉ định vị trí build là Dockerfile
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastfood-api # đặt tên cho container khi khởi chạy thay vì để sinh tự nhiên
+    restart: unless-stopped # tự động khởi động lại nếu container bị crash hoặc server reboot
+    env_file:
+      - ${APP_ENV_FILE:-.env.production} # Nếu biến APP_ENV_FILE chưa được gán sẽ lấy .env.production
+    
+    ports: # Map cổng 8000 của container ra cổng 8000 của máy chủ
+      - "127.0.0.1:8000:8000" # Chỉ cho phép truy cập từ Localhost để sau này đưa Nginx vào làm reverse proxy
+
+    volumes:
+      - fastfood_uploads:/app/uploads # gắn volumn vào /app/uploads trong container. Giúp dữ liệu ko bị mất khi container rebuild
+    depends_on:
+    # Chờ khi postgreSQL đạt trạng thái service_healthy thì services api mới được khởi động. Tránh bị crash hoặc lỗi database 
+      postgres:
+        condition: service_healthy
+    # Sau đó chờ cho redis chạy
+      redis:
+        condition: service_started
+    # 2 services này cùng sử dụng 1 mạng để giao tiếp nội bộ.
+    # Khi config database trong file env thì dùng service name. Ví dụ DB_HOST=postgres. Đã thay thế DB_HOST=localhost bằng DB_HOST=postgres
+    # Tương tự với redis, DB_HOST=redis. 
+    # Nếu dùng Docker Desktop, cần thêm biến #DB_HOST=localhost để Docker Desktop chỉ map ra localhost.
+    networks:
+      - fastfood_network
+
+  postgres:
+    image: postgres:16-alpine # Dùng postgree 16 trên nền alpine giúp nhẹ hơn, giảm dung lượng ổ đĩa
+    container_name: fastfood-postgres
+    restart: unless-stopped
+    environment: # Thiết lập database, tài khoản và mật khẩu khởi tạo ban đầu cho postgres
+      POSTGRES_DB: ${DB_NAME:-fastfood}
+      POSTGRES_USER: ${DB_USERNAME:-fastfood}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+    ports: # ánh xạ cổng postgre của container ra cổng postgree trên máy chủ. Chỉ cho phép kết nối từ localhost, ko cho phép truy cập từ ngoài
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - fastfood_postgres_data:/var/lib/postgresql/data # Lưu trữ dữ liệu vào docker volumn để dữ liệu k bị mất khi container rebuild
+    healthcheck: # Kiểm tra trạng thái của postgres
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s # Thời gian giữa các lần kiểm tra
+      timeout: 5s # Thời gian chờ để postgres phản hồi
+      retries: 5 # Số lần kiểm tra tối đa
+    networks:
+      - fastfood_network
+
+  redis:
+    image: redis:7-alpine # Dùng redis 7 trên nền alpine giúp nhẹ hơn, giảm dung lượng ổ đĩa
+    container_name: fastfood-redis
+    restart: unless-stopped
+    # Mặc định dữ liệu redis là lưu trên RAM. Nhưng nếu container khởi động lại dữ liệu sẽ mất. 
+    # Để khắc phục việc mất dữ liệu nên ta bật chế độ persistence 
+    command: ["redis-server", "--appendonly", "yes"] # Bật chế độ persistence để dữ liệu k bị mất khi container rebuild
+    ports:
+      - "127.0.0.1:6379:6379" # ánh xạ cổng redis của container ra cổng redis trên máy chủ. Chỉ cho phép kết nối từ localhost, ko cho phép truy cập từ ngoài
+    volumes:
+      - fastfood_redis_data:/data # Lưu trữ dữ liệu vào docker volumn để dữ liệu k bị mất khi container rebuild
+    networks:
+      - fastfood_network
+
+# Tạo mạng ảo brigde nôi bộ. Các container trong cùng 1 mạng có thể giao tiếp với nhau qua tên service qua cơ chế DNS nội bộ của Dokcer
+networks:
+  fastfood_network:
+    driver: bridge
+# Khai báo 3 Named Volumes độc lập, giúp tách biệt hoàn toàn dữ liệu khỏi vòng đời của container
+volumes:
+  fastfood_postgres_data:
+  fastfood_redis_data:
+  fastfood_uploads:

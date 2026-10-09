@@ -15,9 +15,11 @@ import { RedisTestController } from './redis.controller';
                 const host = configService.get('REDIS_HOST') || 'localhost';
                 const port = configService.get('REDIS_PORT') || 6379;
                 const password = configService.get('REDIS_PASSWORD') || undefined;
+                const redisTls = configService.get<string>('REDIS_TLS');
 
                 // Kiểm tra xem có đang chạy ở localhost không
                 const isLocal = host === 'localhost';
+                const shouldUseTls = redisTls ? redisTls === 'true' : !isLocal && host !== 'redis';
 
                 return new Redis({
                     host: host,
@@ -25,9 +27,9 @@ import { RedisTestController } from './redis.controller';
                     password: password,
                     
                     // --- THÊM ĐOẠN NÀY (QUAN TRỌNG CHO UPSTASH) ---
-                    tls: isLocal ? undefined : {
+                    tls: shouldUseTls ? {
                         rejectUnauthorized: false // Bỏ qua lỗi chứng chỉ (giúp kết nối mượt hơn)
-                    },
+                    } : undefined,
                     // ----------------------------------------------
 
                     retryStrategy: (times) => {
